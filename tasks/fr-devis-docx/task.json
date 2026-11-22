@@ -1,0 +1,13 @@
+{
+  "id": "fr-devis-docx",
+  "category": "french-business",
+  "mode": "agent",
+  "tools": ["fs"],
+  "max_rounds": 20,
+  "max_tokens": 32768,
+  "prompt": "prompt.txt",
+  "fixtures": [["fixtures/fr/devis_input.md", "devis_input.md"],
+               ["fixtures/office/docx_helper.py", "docx_helper.py"]],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

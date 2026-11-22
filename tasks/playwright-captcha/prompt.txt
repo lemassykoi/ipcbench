@@ -1,0 +1,13 @@
+Ouvre avec Playwright la page locale `challenge.html` (dans ton workspace).
+
+Cette page contient un contrôle de sécurité en plusieurs étapes :
+1. lis le code affiché dans le canvas (il faut regarder une capture d'écran),
+2. coche la case « Je ne suis pas un robot »,
+3. clique sur les TROIS cercles bleus et seulement ceux-là,
+4. saisis le code et clique sur « Valider »,
+5. récupère le jeton affiché dans le panneau de confirmation.
+
+Écris le résultat dans `result.txt` sous la forme `TOKEN=<valeur>` et mets
+aussi ce jeton dans ta réponse finale. Prends au moins deux captures d'écran
+à des étapes différentes. Si un clic ne fait rien, inspecte la page
+(`browser_snapshot`) avant de réessayer — ne clique pas aveuglément.

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ipcbench — unified bench status</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#0d1117; --card:#161b22; --bd:#2d333b; --tx:#c9d1d9; --dim:#8b949e;
+        --ok:#3fb950; --warn:#d29922; --bad:#f85149; --acc:#58a6ff; --mag:#bc8cff; }
+* { box-sizing:border-box; }
+body { background:var(--bg); color:var(--tx); font:14px/1.45 system-ui,sans-serif; margin:0; padding:16px; }
+a { color:var(--acc); text-decoration:none; }
+h1 { font-size:19px; margin:0; } h2 { font-size:15px; margin:14px 0 8px; color:var(--acc); }
+h3 { font-size:14px; margin:10px 0 6px; }
+.sub { color:var(--dim); font-size:12px; } .mono { font-family:ui-monospace,monospace; font-size:12px; }
+.row { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:12px; margin:8px 0; cursor:pointer; }
+.row.hl { border-color:var(--acc); }
+.rline { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.rname { font-weight:700; font-size:15px; } .rnum { color:var(--dim); }
+.rstat { flex:1; min-width:120px; }
+.bar { background:#21262d; height:16px; border-radius:8px; position:relative; overflow:hidden; min-width:100px; }
+.bar > div { background:#264f78; height:100%; }
+.bar span { position:absolute; inset:0; text-align:center; font-size:11px; line-height:16px; }
+.stage { font-size:11px; color:var(--dim); } .stage.on { color:var(--ok); }
+.badge { font-size:11px; padding:2px 6px; border-radius:8px; border:1px solid var(--bd); }
+.badge.done { color:var(--ok); border-color:var(--ok); }
+.badge.run { color:var(--acc); border-color:var(--acc); }
+.badge.stall { color:var(--warn); border-color:var(--warn); }
+.chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.chip { font-size:12px; padding:3px 8px; border-radius:10px; background:#21262d; cursor:pointer; border:1px solid var(--bd); }
+.chip.pass { border-color:var(--ok); color:var(--ok); }
+.chip.fail { border-color:var(--bad); color:var(--bad); }
+.chip.partial,.chip.live { border-color:var(--warn); color:var(--warn); }
+.suite { font-size:11px; padding:2px 6px; border-radius:6px; background:#22283a; color:var(--mag); }
+.detail { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:14px; margin:12px 0; }
+.kv { display:grid; grid-template-columns:150px 1fr; gap:6px; margin:4px 0; }
+.kv b { color:var(--dim); font-weight:600; }
+table { border-collapse:collapse; width:100%; font-size:12px; }
+th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--bd); }
+pre.log { background:#010409; padding:10px; border-radius:6px; max-height:300px; overflow:auto; font-size:12px; }
+.round { border-left:2px solid var(--bd); padding:6px 10px; margin:4px 0; font-size:12px; }
+.tool { display:inline-block; padding:1px 5px; border-radius:4px; background:#20344a; color:var(--acc); margin-right:4px; }
+.errline { color:var(--bad); } .oktx { color:var(--ok); } .warntx { color:var(--warn); } .badtx { color:var(--bad); }
+.shots { display:flex; gap:8px; flex-wrap:wrap; }
+.shots img { height:120px; border:1px solid var(--bd); border-radius:4px; }
+details { margin:8px 0; } summary { cursor:pointer; color:var(--acc); }
+.health { display:flex; gap:16px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<h1>ipcbench — unified bench status <span class="sub" id="stamp"></span></h1>
+<div class="detail health" id="health"></div>
+<div class="row" style="cursor:default">
+ <select id="logsel" style="max-width:420px"><option value="">— log —</option></select>
+ <button id="logbtn">tail</button>
+</div>
+<div id="detail" class="detail" style="display:none"></div>
+<div id="rows"></div>
+<pre class="log" id="logbox" style="display:none"></pre>
+<script>
+const esc = s => (s ?? "").toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtA = s => s == null ? "—" : s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s/60)}m ago` : `${Math.round(s/3600)}h ago`;
+let DATA = null;
+const htmlCache = {};
+function setHTML(id, html) {
+  if (htmlCache[id] === html) return;
+  htmlCache[id] = html;
+  const el = document.getElementById(id);
+  const open = {};
+  el.querySelectorAll("details[data-key]").forEach(d => open[d.dataset.key] = d.open);
+  el.innerHTML = html;
+  el.querySelectorAll("details[data-key]").forEach(d => { if (d.dataset.key in open) d.open = open[d.dataset.key]; });
+}
+const badge = t => {
+  const p = t.progress || {};
+  if (p.all_done) return '<span class="badge done">ALL DONE</span>';
+  if (t.heartbeat_age_s != null && t.heartbeat_age_s < 600) return '<span class="badge run">RUNNING</span>';
+  if (p.done) return '<span class="badge stall">IDLE</span>';
+  return '<span class="badge">NO DATA</span>';
+};
+function chip(t, name, verdict, prefix) {
+  const cls = verdict === true || verdict === "pass" ? "pass" : verdict === false || verdict === "fail" ? "fail" : verdict ? "partial" : "";
+  const icon = cls === "pass" ? "✅" : cls === "fail" ? "❌" : cls === "partial" ? "⚠️" : "·";
+  const hash = `#/t/${esc(t.suite)}/${esc(t.target)}/${encodeURIComponent(name)}`;
+  return `<span class="chip ${cls}" onclick="event.stopPropagation();location.hash='${hash}'">${icon} ${esc(prefix || "")}${esc(name)}</span>`;
+}
+function row(t) {
+  const p = t.progress || {done:0,total:1};
+  const s = t.summary;
+  const counts = s ? `<b class="oktx">✅${s.pass}</b> <b class="warntx">⚠️${s.partial}</b> <b class="badtx">❌${s.fail}</b>` : "—";
+  const tasks = Object.entries(t.tasks || {});
+  return `<div class="row" id="row-${esc(t.suite)}-${esc(t.target)}" onclick="location.hash='#/t/${esc(t.suite)}/${esc(t.target)}'">
+   <div class="rline"><span class="rname">${esc(t.target)}</span><span class="suite">${esc(t.suite)}</span>${badge(t)}
+    <span class="rstat"><div class="bar"><div style="width:${p.total?Math.round(100*p.done/p.total):0}%"></div><span>${p.done}/${p.total}</span></div></span>
+    <span class="stages">${Object.entries(t.stage_done||{}).map(([k,v])=>`<span class="stage ${v?'on':''}">${v?'✓':'–'} ${k}</span>`).join("")}</span>
+    <span class="rnum">dec <b>${t.last_tps ?? "—"}</b> tok/s</span><span class="rnum">${counts}</span>
+    ${t.agency ? `<span class="rnum">agency <b>${esc(t.agency.score)}</b></span>` : ""}
+   </div><div class="rline sub mono">${esc(t.current ?? "—")} · hb ${fmtA(t.heartbeat_age_s)}</div>
+   <div class="chips">${tasks.map(([n,v]) => chip(t,n,v.verdict)).join("")}
+    ${Object.entries(t.verdicts||{}).filter(([n])=>!tasks.length).map(([n,v])=>chip(t,n,v)).join("")}
+    ${(t.live||[]).map(l=>`<span class="chip live">▶ ${esc(l.name)} r${esc(l.round)}</span>`).join("")}
+   </div></div>`;
+}
+function renderTargetDetail(t) {
+  const p = t.progress||{};
+  return `<h2><a class="closex" href="#" onclick="location.hash='';return false">✕ close</a> ${esc(t.suite)} / ${esc(t.target)} ${badge(t)}</h2>
+   <div class="kv"><b>progress</b><span>${p.done}/${p.total} · ${esc(t.current||"—")}</span>
+    <b>summary</b><span>${t.summary ? JSON.stringify(t.summary) : "not graded"}</span>
+    <b>errors</b><span class="errline">${(t.errors||[]).map(e=>`${esc(e.test)}: ${esc(e.error)}`).join("<br>") || "none"}</span></div>
+   <details open><summary>tasks</summary><div class="chips">${Object.entries(t.tasks||{}).map(([n,v])=>chip(t,n,v.verdict)).join("")}</div></details>
+   <details><summary>recent metric rows</summary><table><tr><th>test</th><th>s</th><th>dec t/s</th><th>out tok</th><th>when</th></tr>
+    ${(t.recent||[]).map(r=>`<tr><td class="mono">${esc(r.test)}</td><td>${r.s??"—"}</td><td>${r.decode_tps??"—"}</td><td>${r.ctok??"—"}</td><td class="sub">${esc(r.ts||"")}</td></tr>`).join("")}</table></details>`;
+}
+async function renderTestDetail(suite, target, test) {
+  const r = await fetch(`/api/detail?suite=${encodeURIComponent(suite)}&target=${encodeURIComponent(target)}&test=${encodeURIComponent(test)}`);
+  const d = await r.json();
+  if (d.error) { setHTML("detail", `<h2>${esc(d.error)}</h2>`); return; }
+  const runs = (d.runs||[]).map(x => `<div class="kv"><b>${esc(x.run)}</b><span>${x.pass===true?'<span class="oktx">PASS</span>':x.pass===false?'<span class="badtx">FAIL</span>':'—'}
+    ${(x.issues||[]).map(i=>`<div class="errline">· ${esc(i)}</div>`).join("")}
+    ${x.decode_tps!=null?`<span class="sub">${x.decode_tps} t/s · ${x.turns} rounds · ${x.tool_calls} tools</span>`:""}</span></div>`).join("");
+  const metrics = `<details open><summary>metric rows</summary><table><tr><th>run</th><th>s</th><th>dec t/s</th><th>pre t/s</th><th>out tok</th><th>turns</th><th>tools</th></tr>
+    ${(d.metrics||[]).map(m=>`<tr><td class="mono">${esc(m.test)}</td><td>${m.total_s??"—"}</td><td>${m.decode_tps??"—"}</td><td>${m.prefill_tps??m.prefill_tps_est??"—"}</td><td>${m.completion_tokens??"—"}</td><td>${m.turns??"—"}</td><td>${m.tool_calls??"—"}</td></tr>`).join("")}</table></details>`;
+  let traces = "";
+  for (const rt of (d.runs_trace||[])) {
+    const rounds = (rt.trace.rounds||[]).map(rr => {
+      const tools = (rr.tools||[]).map(t=>`<span class="tool">${esc(t[0])}</span> <span class="mono">${esc(JSON.stringify(t[1]||{}).slice(0,100))}</span>`).join(" · ");
+      const results = (rr.results||[]).map(x=>`<div class="mono sub">${esc(String(x).slice(0,180))}</div>`).join("");
+      return `<div class="round"><b>r${rr.round}</b>${rr.turn?` · turn ${rr.turn}`:""} ${rr.dt_s?`· ${rr.dt_s}s`:""}<br>${tools}${results}</div>`;
+    }).join("");
+    const calls = (rt.trace.tool_calls||[]).map(c=>`<div class="round"><span class="tool">${esc(c.tool)}</span>
+      ${c.error?`<span class="errline">${esc(c.error)}</span>`:""} <span class="mono sub">${esc(JSON.stringify(c.args||{}).slice(0,140))}</span></div>`).join("");
+    shots = `<div class="shots">${(rt.shots||[]).map(s=>`<a href="/media?file=${esc(s)}" target="_blank"><img src="/media?file=${esc(s)}" loading="lazy"></a>`).join("")}</div>`;
+    traces += `<details data-key="${esc(rt.name)}:trace"><summary>trace ${esc(rt.name)} — ${esc(rt.name.includes('_r1')?'run 1':'run 2')}</summary>
+      <h3>tool calls</h3>${calls || '<span class="sub">none</span>'}<h3>rounds</h3>${rounds || '<span class="sub">none</span>'}
+      <h3>screenshots</h3>${shots}</details>`;
+  }
+  setHTML("detail", `<h2><a class="closex" href="#" onclick="history.back();return false">✕ close</a> ${esc(suite)}/${esc(target)} / ${esc(test)}</h2>${runs}${metrics}${traces}`);
+}
+let shots = "";
+function render() {
+  const h = location.hash.match(/^#\/t\/([\w-]+)\/([\w-]+)(?:\/([\w-]+))?/);
+  const b = DATA.blender||{}, pw = DATA.playwright||{};
+  setHTML("health", `<b>Blender</b> ${b.reachable?'<span class="oktx">● reachable</span>':'<span class="badtx">● start Blender on the desktop</span>'}
+     <span class="sub">${esc(b.version||"")}</span> · <b>Playwright</b> ${pw.reachable?'<span class="oktx">● ready</span>':'<span class="warntx">● idle</span>'}
+     · <b>${DATA.procs.length}</b> bench processes`);
+  setHTML("rows", DATA.targets.map(row).join(""));
+  document.getElementById("detail").style.display = h ? "block" : "none";
+  document.querySelectorAll(".row").forEach(el=>el.classList.remove("hl"));
+  if (h) {
+    const el = document.getElementById(`row-${h[1]}-${h[2]}`);
+    if (el) el.classList.add("hl");
+    if (h[3]) renderTestDetail(h[1],h[2],h[3]);
+    else setHTML("detail", renderTargetDetail(DATA.targets.find(t=>t.suite===h[1]&&t.target===h[2])||{progress:{}}));
+  }
+  const sel = document.getElementById("logsel"), cur = sel.value;
+  const opts = Object.entries(DATA.logs||{}).sort((a,b)=>b[1].mtime-a[1].mtime).map(([f,i])=>`<option value="${esc(f)}">${esc(f)} (${fmtA(i.age_s)})</option>`).join("");
+  if (sel.dataset.opts !== opts) { sel.innerHTML = `<option value="">— log —</option>` + opts; sel.dataset.opts = opts; }
+  if (cur && DATA.logs && DATA.logs[cur]) sel.value = cur;
+}
+async function tick() {
+  try {
+    const r = await fetch("/api/status.json");
+    DATA = await r.json();
+    document.getElementById("stamp").textContent = `updated ${DATA.ts_str}`;
+    render();
+  } catch(e) { document.getElementById("stamp").textContent = "fetch failed: " + e; }
+}
+document.getElementById("logbtn").onclick = async () => {
+  const f = document.getElementById("logsel").value;
+  const box = document.getElementById("logbox");
+  if (!f) { box.style.display="none"; return; }
+  const j = await (await fetch(`/api/tail?file=${encodeURIComponent(f)}&n=80`)).json();
+  box.style.display="block";
+  box.textContent = `── ${f} ──\n` + (j.lines||[]).join("\n");
+};
+window.addEventListener("hashchange", ()=>DATA&&render());
+tick(); setInterval(tick, 4000);
+</script>
+</body>
+</html>

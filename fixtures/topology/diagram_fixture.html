@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Schéma réseau IPC — extrait de test</title>
+<style>
+ body { font:14px system-ui,sans-serif; background:#0d1117; color:#c9d1d9; margin:0; }
+ #container { position:relative; width:900px; height:900px; margin:20px auto; background:#111823; }
+ svg { position:absolute; inset:0; width:900px; height:900px; }
+ .node { position:absolute; border:1px solid #58a6ff; border-radius:8px; padding:10px;
+         background:#161b22; width:220px; }
+ .node.switch { left:340px; top:80px; width:300px; }
+ .node.router { left:340px; top:220px; }
+ .node.netgear { left:120px; top:380px; }
+ .node.server { left:120px; top:600px; }
+ .node.server.r730 { left:560px; }
+ .ports { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+ .port { width:24px; height:22px; border-radius:4px; background:#224; text-align:center;
+         font-size:11px; line-height:22px; border:1px solid #4488ff; }
+ .port.purple { border-color:#aa44ff; background:#321; }
+</style>
+</head>
+<body>
+<div id="container">
+<svg id="links" xmlns="http://www.w3.org/2000/svg"></svg>
+<div class="node router" id="router"><b>pfSense</b>
+ <div class="ports"><span class="port purple" id="pfs-p2">P2</span><span class="port purple" id="pfs-p4">P4</span></div></div>
+<div class="node switch" id="switch"><b>Zyxel XGS1935-28</b>
+ <div class="ports"><span class="port" id="sfp-3">S3</span><span class="port" id="sfp-4">S4</span></div></div>
+<div class="node netgear" id="netgear"><b>Netgear XS708T</b>
+ <div class="ports"><span class="port" id="ng-3">P3</span><span class="port" id="ng-7">P7</span><span class="port" id="ng-8">P8</span></div></div>
+<div class="node server" id="r720"><b>Dell R720</b>
+ <div class="ports"><span class="port" id="dell720-p1">P1</span><span class="port purple" id="dell720-p4">P4</span></div></div>
+<div class="node server r730" id="r730"><b>Dell R730</b>
+ <div class="ports"><span class="port" id="dell730-p1">P1</span><span class="port purple" id="dell730-p4">P4</span></div></div>
+</div>
+<script>
+const CONNECTIONS = [
+ {from:'switch',to:'netgear',fromPort:'sfp-4',toPort:'ng-8',color:'#4488ff',label:'10G SFP+'},
+ {from:'netgear',to:'r720',fromPort:'ng-8',toPort:'dell720-p1',color:'#4488ff',label:'10G P8'},
+ {from:'switch',to:'r730',fromPort:'sfp-4',toPort:'dell730-p1',color:'#4488ff',label:'10G S4'},
+ {from:'r730',to:'router',fromPort:'dell730-p4',toPort:'pfs-p4',color:'#ff4444',label:'DMZ'}
+];
+const svg = document.getElementById('links');
+let svgText = '';
+for (const c of CONNECTIONS) {
+  const a = document.getElementById(c.fromPort).getBoundingClientRect();
+  const b = document.getElementById(c.toPort).getBoundingClientRect();
+  const box = document.getElementById('container').getBoundingClientRect();
+  const x1 = a.left + a.width/2 - box.left, y1 = a.bottom - box.top;
+  const x2 = b.left + b.width/2 - box.left, y2 = b.top - box.top;
+  svgText += `<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${c.color}" fill="none" stroke-width="3"/>`;
+}
+svg.innerHTML = svgText;
+</script>
+</body>
+</html>

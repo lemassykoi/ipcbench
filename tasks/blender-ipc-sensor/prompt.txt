@@ -1,0 +1,14 @@
+Dans la session Blender *live* connectée, construis un capteur d'alarme IPC mural.
+
+Livrables attendus :
+1. Trois objets nommés exactement `SensorBody`, `MountBracket` et `StatusLED`.
+2. Le boîtier `SensorBody` doit mesurer environ 0,12 × 0,06 × 0,04 m (x,y,z) et
+   utiliser un matériau PBR métallique ~0,2 / rugosité ~0,4.
+3. `StatusLED` doit avoir un matériau avec une émission visible (emissive non nulle).
+4. Exporte `exports/sensor.glb` (GLB, échelle appliquée, origines au sol) et
+   sauvegarde `session.blend`.
+5. Vérifie réellement le résultat (inspection des objets + au moins une capture
+   d'écran), puis écris `FINAL.md` avec la liste des fichiers et un résumé.
+
+Ne réponds pas sans avoir exporté le GLB et sauvegardé le .blend. Si un appel
+Blender lève une erreur, lis-la, corrige et réessaie — ne devine pas.

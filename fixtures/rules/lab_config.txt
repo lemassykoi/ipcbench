@@ -1,0 +1,5 @@
+laboratoire IPC — configuration synthétique (jeu de test public)
+interface WAN2_SOSH (opt4) : IP publique 203.0.113.7
+interface WAN_2DOT5G (opt9) : IP publique 198.51.100.9
+passerelle : 203.0.113.1
+rôle : DMZ vers 192.168.102.2

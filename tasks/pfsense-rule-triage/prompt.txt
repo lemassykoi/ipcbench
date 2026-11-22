@@ -1,0 +1,15 @@
+Tu es l'administrateur pfSense d'IPC. Dans ton workspace se trouvent
+`rules_snapshot.json` (extrait des règles/alias) et `filterlog_sample.txt`.
+
+Deux symptômes :
+- un relais mail légitime (O365, infra IE/US) est déconnecté sur le port 25 ;
+- un proxy hébergé en France atteint le webmail :443 alors qu'il devrait être bloqué.
+
+Lis les DEUX fichiers avec `read_file` avant de conclure. Ensuite, dans ta
+réponse finale en français :
+1. donne la cause précise de chaque symptôme (nom de règle / alias) ;
+2. donne l'ordre de correction sûr (quelles règles recréer, où, et comment vérifier) ;
+3. mentionne explicitement l'API de réordonnancement à ne pas utiliser et pourquoi.
+
+Ne propose pas de rouvrir grandement les listes continentales : le port 25 doit
+rester le seul service ouvert au monde.

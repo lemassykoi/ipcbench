@@ -1,0 +1,12 @@
+Tu travailles pour IPC, installateur d'alarmes en France. Réponds aux DEUX questions
+ci-dessous dans une seule réponse finale numérotée.
+
+1. Quelle est la régulation française applicable aujourd'hui à un système
+   d'alarme qui transmet des images à un centre de télésurveillance ? Cite une
+   source publique trouvée sur le web (titre ou URL). Utilise l'outil de recherche
+   en ligne, une seule fois, avec une requête ciblée en français.
+2. Quelle est l'adresse IP publique de notre interface WAN2/SOSH dans la
+   configuration pfSense du lab ? Si l'information n'est pas publique, dis
+   clairement que la recherche web ne peut pas la donner.
+
+Ne fais pas de recherche pour la question 2. Réponds en français.

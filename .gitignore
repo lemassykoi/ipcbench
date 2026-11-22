@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+results/
+transcripts/
+traces/
+workspaces/
+*.log
+*.nohup
+.env
+*api-key*
+*secret*
+.DS_Store

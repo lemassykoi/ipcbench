@@ -1,0 +1,13 @@
+{
+  "id": "blender-ipc-sensor",
+  "category": "complex-tool-use",
+  "mode": "agent",
+  "tools": ["fs", "blender"],
+  "max_rounds": 28,
+  "max_tokens": 32768,
+  "prompt": "prompt.txt",
+  "fixtures": [],
+  "reference": "reference.md",
+  "checks": "checks.py",
+  "images": true
+}

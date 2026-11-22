@@ -1,0 +1,15 @@
+À partir de `devis_input.md`, prépare le devis D-2026-TEST-014 pour SARL Atelier Test.
+
+Tu disposers d'un petit module sans dépendance `docx_helper.py` (fonction
+`create_docx(path, lines)`). Écris un script Python `generate.py` qui l'utilise
+pour produire un VRAI fichier `devis.docx` avec :
+
+1. l'en-tête « DEVIS D-2026-TEST-014 » et la date du 12 novembre 2026 ;
+2. le client SARL Atelier Test et les coordonnées de l'artisan ;
+3. les trois lignes (désignation, quantité, prix unitaire HT, total HT) ;
+4. le total HT, le TVA 20 % et le total TTC, en euros avec deux décimales ;
+5. la mention de validité 30 jours.
+
+Écris aussi `devis.txt` avec le même contenu en texte brut. Exécute ton script
+avec `exec` (`python3 generate.py`) puis vérifie que `devis.docx` existe et
+contient bien les montants attendus. Réponds en français avec un récapitulatif.

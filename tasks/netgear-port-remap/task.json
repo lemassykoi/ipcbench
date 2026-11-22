@@ -1,0 +1,12 @@
+{
+  "id": "netgear-port-remap",
+  "category": "long-agentic-coding",
+  "mode": "agent",
+  "tools": ["fs"],
+  "max_rounds": 24,
+  "max_tokens": 32768,
+  "prompt": "prompt.txt",
+  "fixtures": [["fixtures/topology/diagram_fixture.html", "diagram.html"]],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

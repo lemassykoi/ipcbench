@@ -1,0 +1,26 @@
+{
+  "snapshot": "synthetic-lab-2026-11-21",
+  "interfaces": ["WAN_2DOT5G (opt9, Freebox, public IP)", "WAN2_SOSH (opt4, Sosh Livebox DMZ)"],
+  "user_rules_WAN_2DOT5G_top_down": [
+    {"n": 1, "name": "pfB reputation auto blocks", "action": "block", "note": "floats to top via hourly cron"},
+    {"n": 2, "name": "GeoDeny WORLD except FR", "action": "block", "src": "!Allow_FR", "note": "source-not match"},
+    {"n": 3, "name": "GeoDeny Proxy+Satellite", "action": "block", "src": "pfB_PS_v4"},
+    {"n": 4, "name": "Kuma ping from MON_KUMA", "action": "pass", "dst_port": 443},
+    {"n": 5, "name": "WG/NAT passes", "action": "pass"}
+  ],
+  "floating_rules": [],
+  "aliases": {
+    "Allow_FR": {"type": "urltable", "url": "https://www.ipdeny.com/ipblocks/data/countries/fr.zone", "entries": 4761},
+    "pfB_PS_v4": {"type": "pfB GeoIP A1/A2", "entries": 0, "note": "old URL feeds are dead"},
+    "banned": {"type": "fail2ban-UI", "entries": 3}
+  },
+  "recent_events": [
+    "2026-11-20 21:04 mail relay 52.97.197.189 (O365, IE infra) connection to port 25 dropped by GeoDeny WORLD",
+    "2026-11-21 03:59 FR residential proxy 82.64.x.x reached webmail :443 through GeoDeny WORLD",
+    "2026-11-21 04:02 iDRAC 10.0.0.8 banned by postfix-sasl on :587"
+  ],
+  "known_bad_practices_seen_in_history": [
+    "POST /firewall/rules/interface/<if>/reorder silently deleted 21 rules",
+    "GeoIP continent entries are empty containers unless countries are ticked in the entry edit form"
+  ]
+}

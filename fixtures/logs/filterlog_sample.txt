@@ -1,0 +1,8 @@
+2026-11-21T03:58:11Z filterlog: WAN_2DOT5G rule 2 GeoDeny WORLD except FR block 198.51.100.22
+2026-11-21T03:59:07Z filterlog: WAN_2DOT5G rule 2 GeoDeny WORLD except FR block 203.0.113.44
+2026-11-21T03:59:41Z filterlog: WAN_2DOT5G rule 4 Kuma ping from MON_KUMA pass 34.148.136.233
+2026-11-21T04:00:02Z postfix/smtpd: warning: unknown[198.51.100.91]: SASL LOGIN authentication failed
+2026-11-21T04:01:15Z filterlog: WAN2_SOSH rule 3 GeoDeny Proxy+Satellite block 192.0.2.77
+2026-11-21T04:02:00Z fail2ban.actions: ban 10.0.0.8 (postfix-sasl, 1 year)
+2026-11-21T04:02:31Z filterlog: WAN_2DOT5G rule 2 GeoDeny WORLD except FR block 198.51.100.22
+2026-11-21T04:03:10Z postfix/smtpd: connect from mail.example.net[52.97.197.189]: port 25 reset by peer

@@ -1,0 +1,14 @@
+{
+  "id": "tool-discipline-ipc",
+  "category": "tool-discipline",
+  "mode": "scenario",
+  "tools": ["online_search", "fs_read"],
+  "max_rounds": 10,
+  "max_tokens": 8192,
+  "prompt": "prompt.txt",
+  "turns": "turns.json",
+  "fail_tool_after": {"online_search": 1},
+  "fixtures": [["fixtures/rules/lab_config.txt", "lab_config.txt"]],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

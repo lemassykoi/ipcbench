@@ -1,0 +1,13 @@
+{
+  "id": "long-context-log-dig",
+  "category": "long-context-fidelity",
+  "mode": "single",
+  "tools": [],
+  "max_rounds": 1,
+  "max_tokens": 4096,
+  "prompt": "prompt.txt",
+  "inject": {"fixture": "fixtures/longctx/corpus.txt", "label": "JOURNAL_FILTERLOG (3000 lignes, non trié):"},
+  "fixtures": [],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

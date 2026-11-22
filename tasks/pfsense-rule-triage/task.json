@@ -1,0 +1,13 @@
+{
+  "id": "pfsense-rule-triage",
+  "category": "infra-reasoning",
+  "mode": "scenario",
+  "tools": ["fs_read"],
+  "max_rounds": 8,
+  "max_tokens": 8192,
+  "prompt": "prompt.txt",
+  "fixtures": [["fixtures/rules/rules_snapshot.json", "rules_snapshot.json"],
+               ["fixtures/logs/filterlog_sample.txt", "filterlog_sample.txt"]],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

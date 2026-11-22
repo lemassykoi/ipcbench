@@ -1,0 +1,17 @@
+Le fichier `diagram.html` est une copie de test de notre schéma réseau. Il contient
+des erreurs de câblage par rapport à la réalité IPC :
+
+- le lien Zyxel → Netgear doit partir du port SFP+ **S3** et arriver sur le port
+  **P7** du Netgear (côté SFP+, pas le P8) ;
+- le lien Netgear → Dell R720 doit partir du port **P3** du Netgear ;
+- le lien DMZ du Dell R720 (port P4) vers pfSense **P2** manque et doit être
+  ajouté avec la couleur pourpre `#aa44ff` ;
+- le lien DMZ du Dell R730 (P4 → pfSense P4) utilise la couleur rouge du WAN :
+  corrige-la en pourpre `#aa44ff`.
+
+Corrige `diagram.html` **dans ton workspace uniquement**, sans toucher à aucun
+autre fichier. Vérifie ensuite réellement ton travail : rends la page avec
+`brave-browser --headless=new --disable-gpu --no-sandbox --dump-dom file://<chemin>/diagram.html`
+via l'outil `exec`, puis écris un `VERIFY.md` qui contient la sortie de cette
+commande (ou un extrait) et la liste des corrections. Ne te contente pas de
+dire que c'est corrigé : exécute la vérification et lis le résultat.

@@ -1,0 +1,12 @@
+Tu finds ci-dessous un journal de 3000 lignes mêlant filterlog pfSense et
+événements fail2ban. Une seule ligne correspond à l'événement suivant :
+
+« le 2026-11-19 à 04:02, un hôte venu d'un pays AUTORISÉ a été banni par le jail
+postfix-sasl après des échecs d'authentification sur le port 587 ».
+
+Réponds EXACTEMENT à ces deux questions, sans résumer le journal :
+1. Quelle adresse IP a été bannie ?
+2. Quel pays (code à deux lettres) est indiqué sur cette ligne ?
+
+Format attendu : `IP=<adresse>` puis `PAYS=<code>` sur la ligne suivante.
+Ne te fie pas aux lignes voisines : recherche la date, l'heure et le jail exacts.

@@ -1,0 +1,12 @@
+{
+  "id": "online-veille-reglementaire",
+  "category": "simple-tool-use",
+  "mode": "scenario",
+  "tools": ["online_search"],
+  "max_rounds": 6,
+  "max_tokens": 8192,
+  "prompt": "prompt.txt",
+  "fixtures": [],
+  "reference": "reference.md",
+  "checks": "checks.py"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "playwright-captcha",
+  "category": "hard-browser-use",
+  "mode": "agent",
+  "tools": ["fs", "playwright"],
+  "max_rounds": 18,
+  "max_tokens": 32768,
+  "prompt": "prompt.txt",
+  "fixtures": [],
+  "reference": "reference.md",
+  "checks": "checks.py",
+  "images": true
+}
