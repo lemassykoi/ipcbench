@@ -13,6 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from engine import (TARGETS, get_key, call_with_retry, metric_row, calibrate,
                     Sampler, OUTPUT_TOKENS, NO_THINK)
+from mcp_client import ToolBox
 
 SYSTEM = {
     "single": ("Tu es un assistant méticuleux travaillant pour IPC, installateur d'alarmes "

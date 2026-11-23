@@ -49,6 +49,11 @@ def main():
             answer_file = os.path.join(outdir, "transcripts", r + ".out.txt")
             answer = open(answer_file, errors="replace").read() if os.path.isfile(answer_file) else ""
             ws = os.path.join(outdir, "workspaces", r)
+            final_md = os.path.join(ws, "FINAL.md")
+            used_final_md = False
+            if not answer.strip() and os.path.isfile(final_md):
+                answer = open(final_md, errors="replace").read()
+                used_final_md = True
             ctx = {"outdir": ws, "taskdir": cfg["dir"], "answer": answer,
                    "answers": trace.get("answers", [answer]),
                    "rounds": trace.get("rounds", []),
@@ -65,7 +70,7 @@ def main():
                     g = {"pass": False, "issues": [f"grader error: {e}"], "checks": {}}
             runs.append({"run": r, "pass": g.get("pass"), "issues": g.get("issues", []),
                          "checks": g.get("checks", {}), "re": bool(rec.get("re")),
-                         "degenerate": bool(rec.get("degenerate")),
+                         "degenerate": bool(rec.get("degenerate")) and not used_final_md,
                          "decode_tps": rec.get("decode_tps"), "turns": rec.get("turns"),
                          "tool_calls": rec.get("tool_calls")})
         if not runs:
