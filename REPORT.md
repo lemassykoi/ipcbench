@@ -1,11 +1,11 @@
 # ipcbench — real-work agent benchmark
-_seed 42 · temp 0 · 2 runs/task · 2026-11-23 04:38_
+_seed 42 · temp 0 · 2 runs/task · 2026-11-23 13:23_
 
 ## Per-task results
 
 | Task | Category | 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) |
 |---|---|---|
-| `blender-ipc-sensor` | complex-tool-use | ❌ 59.9 t/s · 28r · 30 tools · ⚠output |
+| `blender-ipc-sensor` | complex-tool-use | ❌ 82.1 t/s · 28.0r · 32.5 tools · ⚠output |
 | `fr-devis-docx` | french-business | ⚠️ 88.8 t/s · 20.0r · 21.0 tools · ⚠output |
 | `long-context-log-dig` | long-context-fidelity | ✅ 90.0 t/s · 1.0r · 0 tools |
 | `netgear-port-remap` | long-agentic-coding | ✅ 83.9 t/s · 14.5r · 16.5 tools |
@@ -20,7 +20,7 @@ Legend: ✅ both runs pass · ⚠️ mixed · ❌ both fail · ⚠output = empty
 
 | Target | Pass | Partial | Fail | Runs | Median decode tok/s |
 |---|---|---|---|---|---|
-| 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) | 5 | 1 | 2 | 16 | 82.3 |
+| 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) | 5 | 1 | 2 | 16 | 82.5 |
 
 ## Method
 

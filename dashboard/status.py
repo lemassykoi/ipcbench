@@ -24,7 +24,7 @@ SUITES = {
                  "targets": list(TARGETS)},
 }
 try:
-    legacy = os.path.join(ROOT, "lukesdevlab")
+    legacy = os.path.join(os.path.dirname(ROOT), "lukesdevlab")
     spec = importlib.util.spec_from_file_location("legacy_runner", os.path.join(legacy, "runner.py"))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
