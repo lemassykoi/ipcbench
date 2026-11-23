@@ -9,7 +9,7 @@ AMOUNTS = ["1120.00", "224.00", "1344.00"]
 
 def norm(s):
     s = s.replace("\u00a0", " ").replace("\u202f", " ")
-    s = s.replace(" ", "").replace(".", "")
+    s = s.replace(" ", "").replace(",", ".")
     return s.lower()
 
 
@@ -43,8 +43,7 @@ def grade(ctx):
             issues.append(f"docx lacks amount {a}")
     plain = os.path.join(ws, "devis.txt")
     ptxt = open(plain, errors="replace").read() if os.path.isfile(plain) else ""
-    checks["devis_txt"] = bool(ptxt.strip()) and all(a.replace(".", "") in norm(ptxt)
-                                                      or a in ptxt for a in AMOUNTS)
+    checks["devis_txt"] = bool(ptxt.strip()) and all(a in norm(ptxt) for a in AMOUNTS)
     if not checks["devis_txt"]:
         issues.append("devis.txt missing or amounts wrong")
     calls = ctx.get("tool_calls", [])

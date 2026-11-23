@@ -6,6 +6,7 @@ import os
 import queue
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -341,14 +342,33 @@ class ToolBox:
             elif self.playwright:
                 raw = self.playwright.call(name, args)
                 texts = [p.get("text", "") for p in raw if p.get("type") == "text"]
+                text = "\n".join(texts)
                 image_b64 = next((p.get("data") for p in raw if p.get("type") == "image"), None)
-                parts = self._parts("\n".join(texts), image_b64, name)
+                if not image_b64 and name == "browser_take_screenshot":
+                    for mm in re.finditer(r"\]\(\./([^)\s]+\.(?:png|jpg|jpeg|webp))\)", text, re.I):
+                        src = os.path.join(os.getcwd(), mm.group(1))
+                        if not os.path.isfile(src):
+                            continue
+                        os.makedirs(self.save_dir, exist_ok=True)
+                        self.shot_n += 1
+                        ext = os.path.splitext(src)[1]
+                        dst = os.path.join(self.save_dir, f"{int(time.time())}_{self.shot_n:03d}_{name}{ext}")
+                        shutil.copyfile(src, dst)
+                        image_b64 = base64.b64encode(open(dst, "rb").read()).decode("ascii")
+                        break
+                parts = self._parts(text, None, name)
+                if image_b64 and (self.images or IMAGES_TO_MODEL):
+                    parts.append({"type": "image_url",
+                                  "image_url": {"url": f"data:image/png;base64,{image_b64}"}})
             else:
                 raise RuntimeError(f"unknown tool {name}")
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:400]}"
             parts = self._parts("ERROR: " + err)
-        rec = {"tool": name, "args": args, "result": parts[0]["text"][:1200],
+        text = parts[0].get("text", "")
+        if not err and (re.search(r'"status"\s*:\s*"error"', text) or text.startswith("ERROR:")):
+            err = text.splitlines()[0][:300]
+        rec = {"tool": name, "args": args, "result": text[:1200],
                "error": err, "dt_s": round(time.time() - t0, 2), "ts": time.strftime("%F %T")}
         self.calls.append(rec)
         return parts, rec
