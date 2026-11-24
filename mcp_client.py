@@ -257,10 +257,13 @@ class ToolBox:
         if "playwright" in self.kinds:
             self.playwright = StdioMCP(PLAYWRIGHT_CMD)
             self.playwright.start()
-            names = [t["name"] for t in self.playwright.tools()]
-            wanted = [t for t in self.playwright.tools()
-                      if t["name"] in names and not t["name"].startswith("_")]
-            self.tools.extend(wanted)
+            for t in self.playwright.tools():
+                if t["name"].startswith("_"):
+                    continue
+                self.tools.append({"type": "function", "function": {
+                    "name": t["name"], "description": t.get("description", ""),
+                    "parameters": t.get("inputSchema") or
+                    {"type": "object", "properties": {}}}})
         return self.tools
 
     def _save_image(self, b64, tag):
