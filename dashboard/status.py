@@ -98,7 +98,7 @@ def target_state(suite, target):
     done = status.get("done", []) if status else []
     cur = status.get("current") if status else None
     all_done = bool(done) and cur == "ALL DONE"
-    total = status.get("plan_total") or len(done) or (1 if not all_done else 1)
+    total = (status.get("plan_total") if status else None) or len(done) or (1 if not all_done else 1)
     st["current"] = cur
     st["progress"] = {"done": len(done), "total": total, "all_done": all_done}
     hb = _mtime(os.path.join(d, "status.json"))
@@ -173,10 +173,24 @@ def _probe_playwright():
     return {"reachable": bool(found), "pids": found[:5]}
 
 
+def _suite_targets(s):
+    found = set(s.get("targets", []))
+    rd = s.get("results")
+    if rd and os.path.isdir(rd):
+        for name in os.listdir(rd):
+            sub = os.path.join(rd, name)
+            if not os.path.isdir(sub) or name.startswith(("_", ".")):
+                continue
+            if any(os.path.exists(os.path.join(sub, f)) for f in
+                   ("metrics.jsonl", "status.json", "GRADES.json")):
+                found.add(name)
+    return sorted(found)
+
+
 def build_status():
     targets = []
     for suite, s in SUITES.items():
-        for t in s["targets"]:
+        for t in _suite_targets(s):
             targets.append(target_state(suite, t))
     targets.sort(key=lambda x: x.get("recency_ts") or 0, reverse=True)
     procs = []
@@ -201,7 +215,7 @@ def build_status():
 
 def detail_state(suite, target, test=None):
     s = SUITES.get(suite)
-    if not s or target not in s["targets"]:
+    if not s or target not in _suite_targets(s):
         return {"error": f"unknown target {suite}/{target}"}
     d = os.path.join(s["results"], target)
     out = {"suite": suite, "target": target, "test": test, "kind": "target"}
