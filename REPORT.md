@@ -1,18 +1,18 @@
 # ipcbench — real-work agent benchmark
-_seed 42 · temp 0 · 2 runs/task · 2026-11-24 14:05_
+_seed 42 · temp 0 · 2 runs/task · 2026-11-24 22:44_
 
 ## Per-task results
 
-| Task | Category | 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) | PGX1 GB10 vLLM Qwen3.8-Flash-Next-FP4-Local (1M, :11474) |
-|---|---|---|---|
-| `blender-ipc-sensor` | complex-tool-use | ⚠️ 83.8 t/s · 29.0r · 34.0 tools | ⚠️ 40.7 t/s · 29.0r · 32.0 tools |
-| `fr-devis-docx` | french-business | ✅ 78.3 t/s · 17.5r · 22.0 tools | ✅ 39.1 t/s · 16.0r · 20.5 tools |
-| `long-context-log-dig` | long-context-fidelity | ✅ 90.0 t/s · 1.0r · 0 tools | ✅ 51.3 t/s · 1.0r · 0 tools |
-| `netgear-port-remap` | long-agentic-coding | ✅ 83.9 t/s · 14.5r · 16.5 tools | ✅ 44.2 t/s · 12.0r · 12.5 tools |
-| `online-veille-reglementaire` | simple-tool-use | ✅ 71.9 t/s · 2.0r · 1.0 tools | ✅ 37.2 t/s · 2.0r · 1.0 tools |
-| `pfsense-rule-triage` | infra-reasoning | ✅ 86.7 t/s · 2.0r · 2.0 tools | ⚠️ 38.1 t/s · 2.0r · 2.0 tools |
-| `playwright-captcha` | hard-browser-use | ❌ 58.4 t/s · 19.0r · 18.0 tools | ✅ 26.4 t/s · 19.0r · 22.5 tools |
-| `tool-discipline-ipc` | tool-discipline | ✅ 67.3 t/s · 7.0r · 3.5 tools | ✅ 37.3 t/s · 7.0r · 3.0 tools |
+| Task | Category | 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) | Qwen3.8-Flash-Next FP4-Local — vLLM TP2 (both PGX boxes, :11474) | PGX1 GB10 vLLM Qwen3.8-Flash-Next-FP4-Local (single-box, archived baseline) |
+|---|---|---|---|---|
+| `blender-ipc-sensor` | complex-tool-use | ⚠️ 83.8 t/s · 29.0r · 34.0 tools | ⚠️ 53.9 t/s · 29.0r · 32.5 tools | ⚠️ 40.7 t/s · 29.0r · 32.0 tools |
+| `fr-devis-docx` | french-business | ✅ 78.3 t/s · 17.5r · 22.0 tools | ✅ 55.3 t/s · 18.0r · 21.5 tools | ✅ 39.1 t/s · 16.0r · 20.5 tools |
+| `long-context-log-dig` | long-context-fidelity | ✅ 90.0 t/s · 1.0r · 0 tools | ✅ 63.3 t/s · 1.0r · 0 tools | ✅ 51.3 t/s · 1.0r · 0 tools |
+| `netgear-port-remap` | long-agentic-coding | ✅ 83.9 t/s · 14.5r · 16.5 tools | ✅ 59.8 t/s · 16.0r · 15.0 tools | ✅ 44.2 t/s · 12.0r · 12.5 tools |
+| `online-veille-reglementaire` | simple-tool-use | ✅ 71.9 t/s · 2.0r · 1.0 tools | ✅ 48.9 t/s · 2.0r · 1.0 tools | ✅ 37.2 t/s · 2.0r · 1.0 tools |
+| `pfsense-rule-triage` | infra-reasoning | ✅ 86.7 t/s · 2.0r · 2.0 tools | ✅ 54.2 t/s · 2.0r · 2.0 tools | ⚠️ 38.1 t/s · 2.0r · 2.0 tools |
+| `playwright-captcha` | hard-browser-use | ❌ 58.4 t/s · 19.0r · 18.0 tools | ✅ 29.0 t/s · 19.0r · 23.5 tools | ✅ 26.4 t/s · 19.0r · 22.5 tools |
+| `tool-discipline-ipc` | tool-discipline | ✅ 67.3 t/s · 7.0r · 3.5 tools | ✅ 46.3 t/s · 7.0r · 3.5 tools | ✅ 37.3 t/s · 7.0r · 3.0 tools |
 
 Legend: ✅ both runs pass · ⚠️ mixed · ❌ both fail · ⚠output = empty/malformed output seen.
 
@@ -21,7 +21,8 @@ Legend: ✅ both runs pass · ⚠️ mixed · ❌ both fail · ⚠output = empty
 | Target | Pass | Partial | Fail | Runs | Median decode tok/s |
 |---|---|---|---|---|---|
 | 3090 Strata Qwen3.8-Flash-Next IQ4_XS (1M) | 6 | 1 | 1 | 16 | 80.6 |
-| PGX1 GB10 vLLM Qwen3.8-Flash-Next-FP4-Local (1M, :11474) | 6 | 2 | 0 | 16 | 38.4 |
+| Qwen3.8-Flash-Next FP4-Local — vLLM TP2 (both PGX boxes, :11474) | 7 | 1 | 0 | 16 | 54.2 |
+| PGX1 GB10 vLLM Qwen3.8-Flash-Next-FP4-Local (single-box, archived baseline) | 6 | 2 | 0 | 16 | 38.4 |
 
 ## Method
 
