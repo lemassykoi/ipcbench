@@ -33,26 +33,33 @@ for name in need:
     if not cfg:
         continue
     extra = dict(t.get("extra") or {})
-    extra.update(NO_THINK)
+    base_extra = dict(t.get("extra") or {})
     msgs = [{"role": "system", "content": SYSTEM["single"]},
             {"role": "user", "content": load_prompt(cfg)}]
-    try:
-        res = call_with_retry(t["base"], key, t["model"], msgs, cfg["max_tokens"], extra=extra)
-        rec = metric_row(name, cfg["mode"], res)
-        rec["test"] = name
-        rec["task"] = tid
-        rec["re"] = True
-        rec["turns"] = 1
-        rec["tool_calls"] = 0
-        answer = res["content"]
-        trace = {"target": a.target, "test": tid, "mode": "single", "re": True,
-                 "rounds": [{"round": 0, "content": answer[:1200]}],
-                 "answers": [answer], "tool_calls": []}
-        json.dump(trace, open(os.path.join(outdir, "traces", name + ".json"), "w"),
-                  indent=1, ensure_ascii=False)
-        open(os.path.join(outdir, "transcripts", name + ".out.txt"), "w").write(answer)
-    except Exception as e:
-        rec = {"test": name, "task": tid, "re": True, "error": str(e)[:200]}
+    # PGX1/gb10 vLLM Qwen reject reasoning_effort no_think/none, so try no_think
+    # first (lukesdevlab behaviour) and fall back to the lane's normal reasoning.
+    rec = {}
+    for attempt_extra, mode in (({**base_extra, **NO_THINK}, "no_think"), (base_extra, "reasoning")):
+        try:
+            res = call_with_retry(t["base"], key, t["model"], msgs, cfg["max_tokens"],
+                                  extra=attempt_extra, retries=0)
+            rec = metric_row(name, cfg["mode"], res)
+            rec["test"] = name
+            rec["task"] = tid
+            rec["re"] = True
+            rec["re_mode"] = mode
+            rec["turns"] = 1
+            rec["tool_calls"] = 0
+            answer = res["content"]
+            trace = {"target": a.target, "test": tid, "mode": "single", "re": True,
+                     "re_mode": mode, "rounds": [{"round": 0, "content": answer[:1200]}],
+                     "answers": [answer], "tool_calls": []}
+            json.dump(trace, open(os.path.join(outdir, "traces", name + ".json"), "w"),
+                      indent=1, ensure_ascii=False)
+            open(os.path.join(outdir, "transcripts", name + ".out.txt"), "w").write(answer)
+            break
+        except Exception as e:
+            rec = {"test": name, "task": tid, "re": True, "re_mode": mode, "error": str(e)[:200]}
     rec["ts"] = time.strftime("%F %T")
     with open(os.path.join(outdir, "metrics.jsonl"), "a") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")

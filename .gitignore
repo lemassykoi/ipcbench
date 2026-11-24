@@ -10,3 +10,7 @@ workspaces/
 *api-key*
 *secret*
 .DS_Store
+# Playwright MCP runtime artifacts (written to run CWD)
+.playwright-mcp/
+/*.png
+!docs/**/*.png

@@ -6,7 +6,8 @@
   "max_rounds": 18,
   "max_tokens": 32768,
   "prompt": "prompt.txt",
-  "fixtures": [],
+  "fixtures": [["fixtures/captcha/challenge.html", "challenge.html"]],
+  "serve": true,
   "reference": "reference.md",
   "checks": "checks.py",
   "images": true

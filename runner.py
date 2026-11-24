@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """ipcbench runner: one target at a time, tasks discovered from tasks/."""
 import argparse
+import functools
 import importlib.util
 import json
 import os
 import re
 import shutil
 import sys
+import threading
 import time
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -92,6 +95,13 @@ def prepare_ws(outdir, cfg, name):
             os.makedirs(os.path.dirname(d), exist_ok=True)
             shutil.copyfile(s, d)
     return ws
+
+
+def start_server(ws):
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=ws)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
 def files_in(ws):
@@ -224,6 +234,11 @@ def run_scenario(t, key, cfg, prompt, outdir, name, extra):
 def run_agent(t, key, cfg, prompt, outdir, name, extra):
     t0 = time.time()
     ws = prepare_ws(outdir, cfg, name)
+    httpd = None
+    serve_url = None
+    if cfg.get("serve"):
+        httpd, serve_url = start_server(ws)
+        prompt = prompt.replace("{SERVE_URL}", serve_url)
     toolbox = ToolBox(cfg.get("tools", []), ws, images=cfg.get("images", False))
     toolbox.start()
     checks = load_checks(cfg)
@@ -296,6 +311,9 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
         except OSError:
             pass
         toolbox.close()
+        if httpd:
+            httpd.shutdown()
+            httpd.server_close()
     rec = metric_row(name, cfg["mode"], final_result or {"content": answer})
     rec["prompt_tokens"] = sum(u.get("prompt_tokens", 0) for u in usage) or rec["prompt_tokens"]
     rec["completion_tokens"] = sum(u.get("completion_tokens", 0) for u in usage) or rec["completion_tokens"]
@@ -311,7 +329,8 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
     rec["preview_grade"] = final_grade
     trace = {"target": t.get("_name"), "test": cfg["id"], "mode": "agent",
              "rounds": rounds, "tool_calls": calls, "answers": [answer],
-             "final_grade": final_grade, "workspace_files": files_in(ws)}
+             "final_grade": final_grade, "workspace_files": files_in(ws),
+             "serve_url": serve_url}
     return answer, rec, trace, ctx
 
 

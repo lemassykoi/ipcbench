@@ -1,4 +1,5 @@
-Ouvre avec Playwright la page locale `challenge.html` (dans ton workspace).
+Ouvre avec Playwright la page `{SERVE_URL}/challenge.html` (servie localement
+par le harness). Ne tente PAS d'ouvrir un fichier `file://` : Playwright le refuse.
 
 Cette page contient un contrôle de sécurité en plusieurs étapes :
 1. lis le code affiché dans le canvas (il faut regarder une capture d'écran),
