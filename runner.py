@@ -231,6 +231,25 @@ def run_scenario(t, key, cfg, prompt, outdir, name, extra):
     return answer, rec, trace, ctx
 
 
+def open_toolbox(kinds, ws, images, tname):
+    """Start the toolbox, retrying if a live tool (Blender add-on) is not yet
+    reachable — the model's own bpy can transiently drop the :9876 server."""
+    last = None
+    for attempt in range(5):
+        toolbox = ToolBox(kinds, ws, images=images)
+        try:
+            toolbox.start()
+            return toolbox
+        except Exception as e:
+            toolbox.close()
+            last = e
+            if "blender" not in (kinds or []):
+                raise
+            print(f"[{tname}] blender preflight retry {attempt + 1}: {str(e)[:90]}", flush=True)
+            time.sleep(6)
+    raise last
+
+
 def run_agent(t, key, cfg, prompt, outdir, name, extra):
     t0 = time.time()
     ws = prepare_ws(outdir, cfg, name)
@@ -239,8 +258,8 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
     if cfg.get("serve"):
         httpd, serve_url = start_server(ws)
         prompt = prompt.replace("{SERVE_URL}", serve_url)
-    toolbox = ToolBox(cfg.get("tools", []), ws, images=cfg.get("images", False))
-    toolbox.start()
+    toolbox = open_toolbox(cfg.get("tools", []), ws, cfg.get("images", False),
+                           f"{t.get('_name')}/{cfg['id']}")
     checks = load_checks(cfg)
     rounds, calls, usage = [], [], []
     msgs = [{"role": "system", "content": SYSTEM["agent"]},
@@ -284,6 +303,12 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
                     msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""),
                                  "name": fn, "content": content})
                 live_write("tools_done")
+                remaining = max_rounds - (i + 1)
+                if remaining == 5:
+                    msgs.append({"role": "user", "content":
+                        f"Plus que {remaining} tours: Termine les livrables RESTANTS maintenant "
+                        "et pr\u00e9pare ta r\u00e9ponse finale. Arr\u00eate les ajustements cosm\u00e9tiques."})
+                    rounds[-1]["budget_nudge"] = remaining
                 continue
             ctx = make_ctx(outdir, cfg, answer, rounds, calls, ws)
             try:
@@ -298,8 +323,20 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
             msgs.append({"role": "user", "content":
                          "VÉRIFICATION AUTOMATIQUE: échec — " + issues +
                          "\nCorrige les livrables dans le workspace, vérifie-les, puis réessaie. "
-                         "Ne réponds pas par du texte seul."})
+                          "Ne réponds pas par du texte seul."})
             live_write("nudge")
+        if not (answer or "").strip():
+            msgs.append({"role": "user", "content":
+                "TERMINE MAINTENANT — n'appelle AUCUN outil. \u00c9cris en fran\u00e7ais ta r\u00e9ponse finale: "
+                "confirme les livrables produits et leurs chemins, puis recopie la valeur exacte demand\u00e9e."})
+            m2 = chat(t, key, msgs, 2048, tools=None, extra=extra)
+            answer = (m2.get("content") or "").strip()
+            usage.append(m2.get("usage") or {})
+            final_result = m2
+            rounds.append({"round": len(rounds), "content": answer[:1200],
+                           "reasoning_chars": len(m2.get("reasoning") or ""),
+                           "tools": [], "results": [], "final_nudge": True, "dt_s": m2.get("total")})
+            print(f"[{t.get('_name')}/{cfg['id']}] final-text nudge -> {len(answer)} chars", flush=True)
     finally:
         ctx = make_ctx(outdir, cfg, answer, rounds, calls, ws)
         try:
@@ -322,6 +359,7 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
     rec["retries"] = sum(1 for c in calls if c.get("error") and not c.get("forced_error"))
     rec["self_recovered"] = any(c.get("error") for c in calls) and final_grade.get("pass") is True
     rec["nudges"] = nudges
+    rec["final_nudge"] = any(r.get("final_nudge") for r in rounds)
     rec["total_s"] = round(time.time() - t0, 2)
     ct = rec["completion_tokens"] or 0
     if ct > 1:
