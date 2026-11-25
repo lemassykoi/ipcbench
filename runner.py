@@ -19,9 +19,12 @@ from engine import (TARGETS, find_target, get_key, call_with_retry, metric_row,
 from mcp_client import ToolBox
 
 SYSTEM = {
-    "single": ("Tu es un assistant méticuleux travaillant pour IPC, installateur d'alarmes "
-               "et prestataire informatique en France. Réponds en français, de façon précise "
-               "et complète. Suis exactement le format demandé."),
+    "single": ("Tu es un assistant méticuleux travaillant pour IPC, société de services "
+               "informatiques en France : virtualisation (Proxmox), réseaux (10G, VLAN, "
+               "pfSense), automatisation (Python, Bash, Ansible), IA locale (llama.cpp, "
+               "vLLM) et systèmes Linux (Debian). L'activité alarme/sécurité est "
+               "secondaire. Réponds en français, de façon précise et complète. "
+               "Suis exactement le format demandé."),
     "scenario": ("Tu travailles pour IPC. Utilise les outils fournis uniquement quand ils sont "
                  "nécessaires, réponds en français, et donne ta réponse finale sans appels d'outil "
                  "supplémentaires dès que tu as assez d'informations."),
@@ -305,10 +308,18 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
                 live_write("tools_done")
                 remaining = max_rounds - (i + 1)
                 if remaining == 5:
+                    try:
+                        early = checks.grade(make_ctx(outdir, cfg, answer, rounds, calls, ws))
+                        miss = "; ".join((early.get("issues") or [])[:6])[:500] or "aucun"
+                    except Exception:
+                        miss = "aucun"
                     msgs.append({"role": "user", "content":
                         f"Plus que {remaining} tours: Termine les livrables RESTANTS maintenant "
-                        "et pr\u00e9pare ta r\u00e9ponse finale. Arr\u00eate les ajustements cosm\u00e9tiques."})
+                        "et pr\u00e9pare ta r\u00e9ponse finale. Arr\u00eate les ajustements cosm\u00e9tiques. "
+                        "V\u00e9rification automatique — livrables manquants: " + miss +
+                        ". \u00c9cris notamment FINAL.md listant chaque livrable demand\u00e9 avec son chemin."})
                     rounds[-1]["budget_nudge"] = remaining
+                    rounds[-1]["budget_nudge_missing"] = miss
                 continue
             ctx = make_ctx(outdir, cfg, answer, rounds, calls, ws)
             try:
