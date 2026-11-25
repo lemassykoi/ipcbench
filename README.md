@@ -1,7 +1,8 @@
 # ipcbench
 
-Benchmark suite for the work an agent really does for IPC (French alarm/security
-installer + IT/network business): French deliverables, office artifacts,
+Benchmark suite for the work an agent really does for IPC (French IT services
+company — virtualisation, networking, automation, local AI, Linux systems — plus
+an alarm/security sub-business): French deliverables, office artifacts,
 infrastructure reasoning, long-horizon agentic coding, long-context fidelity, and
 **appropriate use of real tools** (online search, Blender, Playwright).
 

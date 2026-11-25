@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Unified status dashboard for ipcbench and lukesdevlab (all read-only)."""
+"""Unified status dashboard for ipcbench and lukesdevlab.
+
+Read side (GET) is unauthenticated for LAN humans; the write side (POST
+/api/run|oneshot|abort) is a Bearer-token API so AI agents can drive benches.
+Run with --cert/--key for HTTPS and --token-file for the API token.
+"""
 import argparse
 import glob
 import importlib.util
 import json
 import os
 import re
+import secrets
+import signal
+import ssl
+import subprocess
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,7 +24,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "bridges"))
-from engine import TARGETS  # noqa: E402
+from engine import TARGETS, find_target  # noqa: E402
+
+try:
+    from runner import load_tasks  # noqa: E402
+except Exception:
+    load_tasks = None
 
 TAIL_WHITELIST = re.compile(r"^[\w./-]+\.(log|nohup|txt|jsonl|json)$")
 RUNNING_HINTS = ("runner.py", "agentrun.py", "agency.py", "reempty.py", "grade.py", "status.py")
@@ -254,6 +268,71 @@ def detail_state(suite, target, test=None):
     return out
 
 
+RUN_LOCK_HINTS = ("runner.py --target", "reempty.py", "oneshot.py", "run_target.sh")
+TOKEN_FILE = None
+
+
+def _token():
+    if not TOKEN_FILE:
+        return None
+    try:
+        return open(TOKEN_FILE).read().strip() or None
+    except OSError:
+        return None
+
+
+def runner_busy():
+    out = []
+    for p in glob.glob("/proc/[0-9]*/cmdline"):
+        try:
+            c = open(p, "rb").read().decode("utf-8", "replace").replace("\0", " ")
+        except OSError:
+            continue
+        if any(h in c for h in RUN_LOCK_HINTS) and "status.py" not in c:
+            out.append({"pid": int(p.split("/")[2]), "cmd": " ".join(c.split())[:140]})
+    return out
+
+
+def known_task_ids():
+    if not load_tasks:
+        return set()
+    try:
+        return {c["id"] for c in load_tasks()}
+    except Exception:
+        return set()
+
+
+def joblog_append(rec):
+    os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
+    with open(os.path.join(ROOT, "results", ".jobs.jsonl"), "a") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def joblog_tail(n=30):
+    p = os.path.join(ROOT, "results", ".jobs.jsonl")
+    rows = []
+    if os.path.isfile(p):
+        for line in open(p, errors="replace"):
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                pass
+    return rows[-n:][::-1]
+
+
+def spawn(cmd, env_extra=None, tag="job"):
+    e = dict(os.environ)
+    e.update(env_extra or {})
+    rdir = os.path.join(ROOT, "results", ".running")
+    os.makedirs(rdir, exist_ok=True)
+    out = open(os.path.join(rdir, tag + ".out"), "a")
+    p = subprocess.Popen(cmd, cwd=ROOT, env=e, stdout=out,
+                         stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                         start_new_session=True)
+    open(os.path.join(rdir, tag + ".pid"), "w").write(str(p.pid))
+    return p.pid
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -273,6 +352,154 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return real
 
+    def _read_json(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return None
+        if n > 65536:
+            return None
+        if n <= 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return None
+
+    def _authorized(self):
+        tok = _token()
+        if not tok:
+            return False
+        given = (self.headers.get("Authorization") or "")
+        if not given.startswith("Bearer "):
+            return False
+        return secrets.compare_digest(given[7:].strip(), tok)
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        if u.path not in ("/api/run", "/api/oneshot", "/api/abort"):
+            self._send(404, b'{"error":"not found"}', "application/json")
+            return
+        if not _token():
+            self._send(503, b'{"error":"api disabled (no token file)"}', "application/json")
+            return
+        if not self._authorized():
+            self._send(401, b'{"error":"missing or bad bearer token"}', "application/json")
+            return
+        body = self._read_json()
+        if body is None or not isinstance(body, dict):
+            self._send(400, b'{"error":"invalid json body"}', "application/json")
+            return
+        try:
+            code, obj = self._dispatch_post(u.path, body)
+        except Exception as e:
+            code, obj = 500, {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        self._send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json")
+
+    def _dispatch_post(self, path, body):
+        if path == "/api/abort":
+            killed = []
+            for pf in glob.glob(os.path.join(ROOT, "results", ".running", "*.pid")):
+                try:
+                    pid = int(open(pf).read().strip())
+                    os.killpg(os.getpgid(pid), signal.SIGTERM)
+                    killed.append(os.path.basename(pf)[:-4])
+                except Exception:
+                    pass
+                try:
+                    os.remove(pf)
+                except OSError:
+                    pass
+            for x in runner_busy():
+                try:
+                    os.killpg(os.getpgid(x["pid"]), signal.SIGTERM)
+                    killed.append(str(x["pid"]))
+                except Exception:
+                    pass
+            joblog_append({"ts": time.strftime("%F %T"), "kind": "abort", "killed": killed})
+            return 200, {"ok": True, "killed": killed}
+
+        busy = runner_busy()
+        if busy:
+            return 409, {"error": "a bench run is already in progress", "running": busy[:2]}
+
+        if path == "/api/run":
+            target = str(body.get("target") or "")
+            if not re.match(r"^[\w.-]+$", target):
+                return 400, {"error": "bad target"}
+            if target not in TARGETS and find_target(target) is None:
+                return 404, {"error": f"unknown target {target}"}
+            cmd = ["bash", "scripts/run_target.sh", target]
+            try:
+                rn = int(body.get("runs", 2))
+                if 1 <= rn <= 3:
+                    cmd += ["--runs", str(rn)]
+            except Exception:
+                pass
+            only = body.get("only")
+            if only:
+                ids = [x for x in re.split(r"[,\s]+", str(only)) if x]
+                bad = [x for x in ids if x not in known_task_ids()]
+                if bad:
+                    return 400, {"error": f"unknown task(s): {bad}"}
+                cmd += ["--only", ",".join(ids)]
+            pid = spawn(cmd, tag=target)
+            joblog_append({"ts": time.strftime("%F %T"), "kind": "run",
+                           "target": target, "only": only, "pid": pid})
+            return 202, {"ok": True, "target": target, "pid": pid}
+
+        if path == "/api/oneshot":
+            label = str(body.get("label") or "").strip()
+            endpoint = str(body.get("endpoint") or "").strip()
+            model = str(body.get("model") or "").strip()
+            key = str(body.get("api_key") or "").strip()
+            effort = str(body.get("effort") or "high")
+            runs = body.get("runs", 2)
+            tasks = body.get("tasks", "all")
+            if not (label and endpoint and model and key):
+                return 400, {"error": "label, endpoint, model, api_key are required"}
+            if not re.match(r"^https?://[\w.:@/~%-]+$", endpoint):
+                return 400, {"error": "bad endpoint"}
+            if effort not in ("xhigh", "high", "no_think", "standard", "default", "custom"):
+                return 400, {"error": "bad effort"}
+            if effort == "custom" and not body.get("extra_json"):
+                return 400, {"error": "effort=custom requires extra_json"}
+            try:
+                runs = int(runs)
+                assert 1 <= runs <= 3
+            except Exception:
+                return 400, {"error": "runs must be 1..3"}
+            if isinstance(tasks, list):
+                tasks = ",".join(str(x) for x in tasks)
+            tasks = str(tasks or "all").strip()
+            if tasks and tasks != "all":
+                ids = [x for x in re.split(r"[,\s]+", tasks) if x]
+                bad = [x for x in ids if x not in known_task_ids()]
+                if bad:
+                    return 400, {"error": f"unknown task(s): {bad}"}
+                tasks = ",".join(ids)
+            else:
+                tasks = "all"
+            extra_json = body.get("extra_json")
+            if extra_json:
+                try:
+                    assert isinstance(json.loads(str(extra_json)), dict)
+                except Exception:
+                    return 400, {"error": "extra_json must be a JSON object"}
+            import oneshot as O
+            slug = O.make_slug(label)
+            cmd = [sys.executable, "oneshot.py", "--label", label, "--endpoint", endpoint,
+                   "--model", model, "--effort", effort, "--runs", str(runs),
+                   "--tasks", tasks, "--slug", slug, "--key-env", "IPC_ONESHOT_KEY"]
+            if extra_json:
+                cmd += ["--extra-json", str(extra_json)]
+            pid = spawn(cmd, env_extra={"IPC_ONESHOT_KEY": key}, tag=slug)
+            joblog_append({"ts": time.strftime("%F %T"), "kind": "oneshot", "slug": slug,
+                           "label": label, "endpoint": endpoint, "model": model,
+                           "effort": effort, "runs": runs, "tasks": tasks, "pid": pid})
+            return 202, {"ok": True, "slug": slug, "pid": pid}
+        return 404, {"error": "not found"}
+
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
@@ -283,6 +510,36 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(build_status()).encode(), "application/json")
         elif u.path == "/api/blender":
             self._send(200, json.dumps(_probe_blender()).encode(), "application/json")
+        elif u.path == "/api/tasks":
+            rows = []
+            if load_tasks:
+                try:
+                    rows = [{"id": c["id"], "category": c.get("category"),
+                             "mode": c.get("mode"), "tools": c.get("tools") or []}
+                            for c in load_tasks()]
+                except Exception:
+                    pass
+            self._send(200, json.dumps(rows).encode(), "application/json")
+        elif u.path == "/api/jobs":
+            self._send(200, json.dumps({"running": runner_busy(),
+                                        "jobs": joblog_tail()}).encode(), "application/json")
+        elif u.path == "/api/engines":
+            out, seen = [], set()
+            for n in sorted(TARGETS):
+                out.append({"name": n, "kind": "configured"})
+                seen.add(n)
+            ad = os.path.join(ROOT, "results", ".adhoc")
+            for f in sorted(os.listdir(ad)) if os.path.isdir(ad) else []:
+                if not f.endswith(".json"):
+                    continue
+                n = f[:-5]
+                if n in seen:
+                    continue
+                spec = _json_safe(os.path.join(ad, f)) or {}
+                out.append({"name": n, "kind": "adhoc", "endpoint": spec.get("base"),
+                            "model": spec.get("model"), "label": spec.get("label")})
+                seen.add(n)
+            self._send(200, json.dumps(out).encode(), "application/json")
         elif u.path == "/api/detail":
             suite = (q.get("suite") or ["ipcbench"])[0]
             target = (q.get("target") or [""])[0]
@@ -318,12 +575,25 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    global TOKEN_FILE
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8046)
     ap.add_argument("--bind", default="0.0.0.0")
+    ap.add_argument("--cert", default=None, help="PEM cert for HTTPS (needs --key)")
+    ap.add_argument("--key", default=None, help="PEM private key for HTTPS")
+    ap.add_argument("--token-file", default=None,
+                    help="file holding the Bearer token enabling the POST API")
     a = ap.parse_args()
+    TOKEN_FILE = a.token_file if a.token_file and os.path.isfile(a.token_file) else None
     srv = ThreadingHTTPServer((a.bind, a.port), Handler)
-    print(f"[ipcbench dashboard] http://{a.bind}:{a.port}", flush=True)
+    scheme = "http"
+    if a.cert and a.key:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(a.cert, a.key)
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+        scheme = "https"
+    print(f"[ipcbench dashboard] {scheme}://{a.bind}:{a.port} "
+          f"(api: {'token-auth' if TOKEN_FILE else 'disabled'})", flush=True)
     srv.serve_forever()
 
 

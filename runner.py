@@ -14,8 +14,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from engine import (TARGETS, get_key, call_with_retry, metric_row, calibrate,
-                    Sampler, OUTPUT_TOKENS, NO_THINK)
+from engine import (TARGETS, find_target, get_key, call_with_retry, metric_row,
+                    calibrate, Sampler, OUTPUT_TOKENS, NO_THINK)
 from mcp_client import ToolBox
 
 SYSTEM = {
@@ -374,14 +374,17 @@ def run_agent(t, key, cfg, prompt, outdir, name, extra):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--target", required=True, choices=sorted(TARGETS))
+    ap.add_argument("--target", required=True,
+                    help="configured TARGETS name or a one-shot slug under results/.adhoc/")
     ap.add_argument("--only", default=None, help="comma-separated task ids")
     ap.add_argument("--runs", type=int, default=2)
     ap.add_argument("--out", default=os.path.join(HERE, "results"))
     a = ap.parse_args()
     only = set(a.only.split(",")) if a.only else None
     tasks = load_tasks(only)
-    t = dict(TARGETS[a.target])
+    t = find_target(a.target)
+    if t is None:
+        sys.exit(f"unknown target {a.target!r}: not in TARGETS and no results/.adhoc/{a.target}.json")
     t["_name"] = a.target
     key = get_key(t)
     outdir = os.path.join(a.out, a.target)
@@ -397,15 +400,22 @@ def main():
                    "done": done, "plan_total": len(plan), "started_ts": started,
                    "ts": time.strftime("%F %T")}, open(status_path, "w"))
 
-    smp = Sampler(t.get("sample_host") or t.get("key_host") or "10.0.0.126")
-    smp.start()
+    smp_host = t.get("sample_host") or t.get("key_host")
+    smp = Sampler(smp_host) if smp_host else None
+    if smp:
+        smp.start()
+
+    def dump_res():
+        if smp:
+            json.dump(smp.samples, open(os.path.join(outdir, "resources.json"), "w"))
+
     status([], "START")
     done = []
     with open(rows_path, "a") as rows:
         for cfg, r in plan:
             name = f"{cfg['id']}_r{r}"
             status(done, name)
-            json.dump(smp.samples, open(os.path.join(outdir, "resources.json"), "w"))
+            dump_res()
             prompt = load_prompt(cfg)
             extra = dict(t.get("extra") or {})
             try:
@@ -437,8 +447,9 @@ def main():
             done.append(name)
             print(f"[{a.target}] {name}: {rec.get('verdict')} "
                   f"{rec.get('decode_tps')} tok/s {rec.get('turns')} turns", flush=True)
-    smp.stop_flag.set()
-    json.dump(smp.samples, open(os.path.join(outdir, "resources.json"), "w"))
+    if smp:
+        smp.stop_flag.set()
+        dump_res()
     status(done, "ALL DONE")
     print(f"[runner:{a.target}] finished {len(done)} runs")
 

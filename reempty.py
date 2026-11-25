@@ -8,13 +8,16 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from engine import TARGETS, get_key, call_with_retry, metric_row, NO_THINK
+from engine import TARGETS, find_target, get_key, call_with_retry, metric_row, NO_THINK
 from runner import load_tasks, load_prompt, SYSTEM
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--target", required=True, choices=sorted(TARGETS))
+ap.add_argument("--target", required=True,
+                help="configured TARGETS name or a one-shot slug under results/.adhoc/")
 a = ap.parse_args()
-t = dict(TARGETS[a.target])
+t = find_target(a.target)
+if t is None:
+    sys.exit(f"unknown target {a.target!r}: not in TARGETS and no results/.adhoc/{a.target}.json")
 t["_name"] = a.target
 key = get_key(t)
 outdir = os.path.join(HERE, "results", a.target)

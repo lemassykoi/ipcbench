@@ -19,6 +19,19 @@ def med(vals):
     return round(statistics.median(vals), 1) if vals else None
 
 
+def disp(t):
+    """Display name: configured LABEL, else an ad-hoc one-shot spec label."""
+    if t in LABEL:
+        return LABEL[t]
+    p = os.path.join(HERE, "results", ".adhoc", t + ".json")
+    if os.path.isfile(p):
+        try:
+            return json.load(open(p)).get("label", t)
+        except Exception:
+            pass
+    return t
+
+
 def load(target):
     d = os.path.join(HERE, "results", target)
     rows = {}
@@ -47,7 +60,7 @@ def main():
     L = ["# ipcbench — real-work agent benchmark",
          f"_seed 42 · temp 0 · 2 runs/task · {time.strftime('%F %H:%M')}_\n",
          "## Per-task results\n",
-         "| Task | Category | " + " | ".join(LABEL.get(t, t) for t in targets) + " |",
+         "| Task | Category | " + " | ".join(disp(t) for t in targets) + " |",
          "|---|---|" + "---|" * len(targets)]
     data = {t: load(t) for t in targets}
     for tid, cfg in TASKS.items():
@@ -72,7 +85,7 @@ def main():
         rows, grades = data[t]
         s = grades.get("summary", {}) if grades else {}
         tps = med([r.get("decode_tps") for r in rows.values()])
-        L.append(f"| {LABEL.get(t, t)} | {s.get('pass', 0)} | {s.get('partial', 0)} | "
+        L.append(f"| {disp(t)} | {s.get('pass', 0)} | {s.get('partial', 0)} | "
                  f"{s.get('fail', 0)} | {len(rows)} | {tps or '—'} |")
     L += ["\n## Method\n",
           "- Same tasks and settings on every target; thinking at production effort.\n",

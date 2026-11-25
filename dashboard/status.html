@@ -44,6 +44,11 @@ pre.log { background:#010409; padding:10px; border-radius:6px; max-height:300px;
 .shots { display:flex; gap:8px; flex-wrap:wrap; }
 .shots img { height:120px; border:1px solid var(--bd); border-radius:4px; }
 details { margin:8px 0; } summary { cursor:pointer; color:var(--acc); }
+input, select, button { background:#0d1117; border:1px solid var(--bd); color:var(--tx);
+        border-radius:6px; padding:6px 8px; font:inherit; font-size:13px; }
+button { background:#21262d; cursor:pointer; } button:hover { border-color:var(--acc); }
+input:focus, select:focus { outline:none; border-color:var(--acc); }
+.jobs td { vertical-align:top; }
 .health { display:flex; gap:16px; flex-wrap:wrap; }
 .tabs { display:flex; gap:8px; margin:14px 0 6px; border-bottom:1px solid var(--bd); }
 .tab { padding:8px 16px; cursor:pointer; border:1px solid var(--bd); border-bottom:none;
@@ -60,6 +65,37 @@ details { margin:8px 0; } summary { cursor:pointer; color:var(--acc); }
 <body>
 <h1>ipcbench — unified bench status <span class="sub" id="stamp"></span></h1>
 <div class="detail health" id="health"></div>
+<details class="detail" style="cursor:default" id="trigger">
+ <summary>⚡ Trigger runs — dashboard API (token-gated, for humans & AI agents)</summary>
+ <div class="rline" style="gap:8px;margin:8px 0">
+  <input id="tok" type="password" placeholder="API token (Bearer)" size="30">
+  <span class="sub">stored in this browser only</span>
+ </div>
+ <div class="rline" style="gap:8px;margin:8px 0;flex-wrap:wrap">
+  <b>Run suite:</b>
+  <select id="targ"></select>
+  <input id="only" placeholder="task ids, comma-sep (empty = all)" size="30">
+  <select id="runs"><option>2</option><option>1</option><option>3</option></select>
+  <button id="runbtn">▶ run</button>
+  <button id="abortbtn">■ abort running</button>
+ </div>
+ <div style="margin:10px 0">
+  <b>One-shot vs any OpenAI endpoint:</b>
+  <div class="rline" style="gap:8px;margin:6px 0;flex-wrap:wrap">
+   <input id="os-label" placeholder="label" size="14">
+   <input id="os-ep" placeholder="https://host:port/v1" size="26">
+   <input id="os-model" placeholder="model id" size="20">
+   <input id="os-key" type="password" placeholder="API key" size="22">
+   <select id="os-effort"><option value="xhigh">thinking xhigh (Qwen FN)</option><option value="high">thinking high (Hy4)</option><option value="no_think">no_think</option><option value="standard">reasoning_effort=high (standard)</option><option value="default">engine default</option><option value="custom">custom JSON only</option></select>
+   <input id="os-extra" placeholder='extra body JSON, e.g. {"top_k":20}' size="28">
+   <select id="os-runs"><option>2</option><option>1</option><option>3</option></select>
+   <button id="osbtn">▶ one-shot</button>
+  </div>
+  <div class="chips" id="os-tasks"><span class="sub">loading tasks…</span></div>
+ </div>
+ <div class="sub mono" id="trig-status"></div>
+ <details><summary>recent jobs</summary><div id="jobs" class="sub">—</div></details>
+</details>
 <div class="row" style="cursor:default">
  <select id="logsel" style="max-width:420px"><option value="">— log —</option></select>
  <button id="logbtn">tail</button>
@@ -180,7 +216,7 @@ function render() {
     history.replaceState(null, '', location.pathname + '?suite=' + h[1] + location.hash);
   }
   const b = DATA.blender||{}, pw = DATA.playwright||{};
-  setHTML("health", `<b>Blender</b> ${b.reachable?'<span class="oktx">● reachable</span>':'<span class="badtx">● start Blender on the desktop</span>'}
+  setHTML("health", `<b>Blender</b> ${b.reachable?'<span class="oktx">● reachable</span>':'<span class="badtx">● down — systemctl restart blender-mcp</span>'}
      <span class="sub">${esc(b.version||"")}</span> · <b>Playwright</b> ${pw.reachable?'<span class="oktx">● ready</span>':'<span class="warntx">● idle</span>'}
      · <b>${DATA.procs.length}</b> bench processes`);
   renderTabs();
@@ -215,8 +251,80 @@ document.getElementById("logbtn").onclick = async () => {
   box.style.display="block";
   box.textContent = `── ${f} ──\n` + (j.lines||[]).join("\n");
 };
+// ── trigger panel (dashboard API) ──
+const tokEl = document.getElementById('tok');
+tokEl.value = localStorage.getItem('benchtok') || '';
+tokEl.onchange = () => localStorage.setItem('benchtok', tokEl.value.trim());
+function tstat(m, ok) { const el = document.getElementById('trig-status'); el.textContent = m; el.style.color = ok ? 'var(--ok)' : 'var(--bad)'; }
+async function apiPost(path, body) {
+  const r = await fetch(path, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokEl.value.trim() },
+    body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  return { code: r.status, j };
+}
+async function loadEngines() {
+  try {
+    const e = await (await fetch('/api/engines')).json();
+    const cur = document.getElementById('targ').value;
+    document.getElementById('targ').innerHTML = e.map(x =>
+      `<option value="${esc(x.name)}"${x.name === cur ? ' selected' : ''}>${esc(x.name)}${x.kind === 'adhoc' ? ' (one-shot)' : ''}</option>`).join('');
+  } catch (e) {}
+}
+async function loadTasks() {
+  try {
+    const ts = await (await fetch('/api/tasks')).json();
+    document.getElementById('os-tasks').innerHTML = ts.map(t =>
+      `<span class="chip" data-id="${esc(t.id)}" title="${esc(t.category)} / ${esc(t.mode)}" onclick="this.classList.toggle('pass')">☐ ${esc(t.id)}</span>`).join('') +
+      ' <span class="sub">select none = all tasks</span>';
+  } catch (e) {}
+}
+document.getElementById('runbtn').onclick = async () => {
+  const target = document.getElementById('targ').value;
+  const body = { target, runs: parseInt(document.getElementById('runs').value) };
+  const only = document.getElementById('only').value.trim();
+  if (only) body.only = only;
+  const { code, j } = await apiPost('/api/run', body);
+  tstat(j.error ? `run ${target}: ${j.error}` : `run ${target} started (pid ${j.pid})`, code < 300);
+  loadJobsSoon();
+};
+document.getElementById('abortbtn').onclick = async () => {
+  const { code, j } = await apiPost('/api/abort', {});
+  tstat(j.error || `aborted: ${(j.killed || []).join(', ') || 'nothing running'}`, code < 300);
+  loadJobsSoon();
+};
+document.getElementById('osbtn').onclick = async () => {
+  const sel = [...document.querySelectorAll('#os-tasks .chip.pass')].map(c => c.dataset.id);
+  const body = {
+    label: document.getElementById('os-label').value.trim() || 'oneshot',
+    endpoint: document.getElementById('os-ep').value.trim(),
+    model: document.getElementById('os-model').value.trim(),
+    api_key: document.getElementById('os-key').value,
+    effort: document.getElementById('os-effort').value,
+    extra_json: document.getElementById('os-extra').value.trim() || undefined,
+    runs: parseInt(document.getElementById('os-runs').value),
+    tasks: sel.length ? sel.join(',') : 'all'
+  };
+  const { code, j } = await apiPost('/api/oneshot', body);
+  tstat(j.error ? `one-shot: ${j.error}` : `one-shot started → results/${j.slug} (key not stored)`, code < 300);
+  if (code < 300) { document.getElementById('os-key').value = ''; loadJobsSoon(); }
+};
+async function loadJobs() {
+  try {
+    const d = await (await fetch('/api/jobs')).json();
+    const run = (d.running || []).length
+      ? `<div class="warntx">▶ running: ${d.running.map(r => esc(r.cmd)).join(' | ')}</div>` : '';
+    const rows = (d.jobs || []).map(x => `<tr><td class="mono sub">${esc(x.ts)}</td><td>${esc(x.kind)}</td>
+      <td class="mono">${esc(x.target || x.slug || (x.killed ? 'killed:' + x.killed.join(',') : ''))}</td>
+      <td class="sub mono">${esc([x.only || x.tasks, x.model, x.effort, x.endpoint].filter(Boolean).join(' · '))}</td></tr>`).join('');
+    setHTML('jobs', run + (rows ? `<table class="jobs"><tr><th>when</th><th>kind</th><th>target</th><th>params</th></tr>${rows}</table>` : 'no jobs yet'));
+  } catch (e) {}
+}
+let jobsTimer = null;
+function loadJobsSoon() { clearTimeout(jobsTimer); jobsTimer = setTimeout(() => { loadJobs(); loadEngines(); }, 1500); }
 window.addEventListener("hashchange", ()=>DATA&&render());
 tick(); setInterval(tick, 4000);
+loadEngines(); loadTasks(); loadJobs(); setInterval(loadJobs, 15000);
 </script>
 </body>
 </html>

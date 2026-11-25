@@ -65,8 +65,36 @@ NO_THINK = {"chat_template_kwargs": {"reasoning_effort": "no_think"},
             "reasoning_effort": "no_think"}
 
 
+def adhoc_path(name):
+    """Path of a stored one-shot target spec (results/.adhoc/<name>.json)."""
+    return os.path.join(HERE, "results", ".adhoc", name + ".json")
+
+
+def find_target(name):
+    """Configured TARGETS entry, or an ad-hoc one-shot spec; None if unknown."""
+    if name in TARGETS:
+        return dict(TARGETS[name])
+    p = adhoc_path(name)
+    if os.path.isfile(p):
+        try:
+            spec = json.load(open(p))
+        except Exception:
+            return None
+        return {"base": spec["base"], "key_host": None, "key_path": None,
+                "key_env": spec.get("key_env"), "key_file": spec.get("key_file"),
+                "model": spec["model"], "extra": spec.get("extra") or {},
+                "sample_host": spec.get("sample_host"), "_adhoc": True}
+    return None
+
+
 def get_key(target):
-    if target["key_host"]:
+    if target.get("key_env"):
+        k = os.environ.get(target["key_env"], "").strip()
+        if k:
+            return k
+    if target.get("key_file"):
+        return open(os.path.expanduser(target["key_file"])).read().strip()
+    if target.get("key_host"):
         r = subprocess.run(["ssh", f"clement@{target['key_host']}", f"cat {target['key_path']}"],
                            capture_output=True, text=True, timeout=20)
         return r.stdout.strip()
@@ -160,7 +188,16 @@ def call(base, key, model, messages, max_tokens, tools=None, extra=None,
     content, reasoning = [], []
     usage, timings = {}, {}
     calls, finish = {}, None
-    with urllib.request.urlopen(req, timeout=REQ_TIMEOUT) as resp:
+    try:
+        resp = urllib.request.urlopen(req, timeout=REQ_TIMEOUT)
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            pass
+        raise RuntimeError(f"HTTP {e.code} from {base}: {detail or e.reason}")
+    with resp:
         for raw in resp:
             line = raw.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
